@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:mapbox_maps_flutter/mapbox_maps_flutter.dart';
 import 'package:geolocator/geolocator.dart' as geo;
 import 'services/tile_service.dart';
+import 'services/place_service.dart';
 import 'models/tile_model.dart';
 import 'models/tile_calculator.dart';
 import 'dart:async';
@@ -281,16 +283,42 @@ class _MapScreenState extends State<MapScreen> {
           const SizedBox(width: 16),
         ],
       ),
-      body: MapWidget(
-        key: const ValueKey("mapWidget"),
-        cameraOptions: CameraOptions(
-          center: Point(coordinates: Position(17.0326, 51.1097)),
-          zoom: 15.0,
-        ),
-        styleUri: MapboxStyles.DARK,
-        onMapCreated: _onMapCreated,
+      body: Stack(
+        children: [
+          MapWidget(
+            key: const ValueKey("mapWidget"),
+            cameraOptions: CameraOptions(
+              center: Point(coordinates: Position(17.0326, 51.1097)),
+              zoom: 15.0,
+            ),
+            styleUri: MapboxStyles.DARK,
+            onMapCreated: _onMapCreated,
+          ),
+          Positioned(
+            bottom: 20,
+            left: 20,
+            right: 20,
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                ElevatedButton(
+                  onPressed: _loadPlaces,
+                  child: const Text('Zaladuj miejsca'),
+                ),
+                const SizedBox(width: 10),
+                if (kDebugMode)
+                  ElevatedButton(
+                    onPressed: _seedPlaces,
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.orange,
+                    ),
+                    child: const Text('Seed miejsc'),
+                  ),
+              ],
+            ),
+          ),
+        ],
       ),
-    );
   }
 
   void _showClearMapDialog() {
@@ -336,6 +364,35 @@ class _MapScreenState extends State<MapScreen> {
         const SnackBar(
           content: Text('Mapa wyczyszczona'),
           duration: Duration(seconds: 2),
+        ),
+      );
+    }
+  }
+}
+
+  Future<void> _loadPlaces() async {
+    final placeService = PlaceService();
+    final places = await placeService.getPlaces();
+    
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Zaladowano ${places.length} miejsc'),
+          duration: const Duration(seconds: 2),
+        ),
+      );
+    }
+  }
+
+  Future<void> _seedPlaces() async {
+    final placeService = PlaceService();
+    await placeService.seedPlacesIfEmpty();
+    
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Seed miejsc wykonany'),
+          duration: const Duration(seconds: 2),
         ),
       );
     }
