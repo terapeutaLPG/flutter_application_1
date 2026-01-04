@@ -329,14 +329,15 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
 
     for (final place in places) {
       final claimed = _claimedPlaceIds.contains(place.id);
-      final iconImage = claimed ? "yes_pin_map" : "pin_map";
+      final iconColor = claimed ? Colors.green.value : Colors.red.value;
       final annotation = await _placeManager!.create(
         PointAnnotationOptions(
           geometry: Point(coordinates: Position(place.lon, place.lat)),
           textField: place.name,
           textSize: 12,
           textOffset: [0.0, 1.2],
-          iconImage: iconImage,
+          iconImage: "marker-15",
+          iconColor: iconColor,
         ),
       );
       _placeAnnotations.add(annotation);
@@ -359,17 +360,73 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
     if (place == null) return true;
     
     final claimed = _claimedPlaceIds.contains(place.id);
-    if (claimed) {
+    
+    final pos = _lastKnownPosition;
+    if (pos == null) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('Punkt już odebrany'),
+          content: Text('Brak bieżącej lokalizacji'),
           duration: Duration(seconds: 2),
         ),
       );
       return true;
     }
 
-    // Pozwala odblokowywać bez bliskości
+    final distance = geo.Geolocator.distanceBetween(
+      pos.latitude,
+      pos.longitude,
+      place.lat,
+      place.lon,
+    );
+
+    if (claimed) {
+      showModalBottomSheet(
+        context: context,
+        builder: (ctx) {
+          return Padding(
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Text(place.name, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w600)),
+                const SizedBox(height: 12),
+                Text(
+                  '✅ To miejsce zostało już odblokowane',
+                  style: TextStyle(fontSize: 16, color: Colors.green.shade700),
+                ),
+              ],
+            ),
+          );
+        },
+      );
+      return true;
+    }
+
+    if (distance > place.radiusMeters) {
+      showModalBottomSheet(
+        context: context,
+        builder: (ctx) {
+          return Padding(
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Text(place.name, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w600)),
+                const SizedBox(height: 12),
+                Text(
+                  '❌ Musisz podejść bliżej (${distance.toStringAsFixed(0)}m od miejsca)',
+                  style: TextStyle(fontSize: 16, color: Colors.red.shade700),
+                ),
+              ],
+            ),
+          );
+        },
+      );
+      return true;
+    }
+
     showModalBottomSheet(
       context: context,
       builder: (ctx) {
@@ -413,8 +470,8 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
 
     _claimedPlaceIds.add(place.id);
     
-    // Zmienia ikonkę na yes_pin_map
-    annotation.iconImage = "yes_pin_map";
+    // Zmienia ikonkę na zielone
+    annotation.iconColor = Colors.green.value;
     await _placeManager?.update(annotation);
 
     if (mounted) {
