@@ -12,6 +12,15 @@ class MapScreen extends StatefulWidget {
 class _MapScreenState extends State<MapScreen> {
   MapboxMap? mapboxMap;
 
+  @override
+  void initState() {
+    super.initState();
+    final token = dotenv.env['MAPBOX_ACCESS_TOKEN'] ?? '';
+    if (token.isNotEmpty) {
+      MapboxOptions.setAccessToken(token);
+    }
+  }
+
   _onMapCreated(MapboxMap map) {
     mapboxMap = map;
   }
@@ -41,7 +50,6 @@ class _MapScreenState extends State<MapScreen> {
       ),
       body: MapWidget(
         key: const ValueKey("mapWidget"),
-        resourceOptions: ResourceOptions(accessToken: token),
         cameraOptions: CameraOptions(
           center: Point(coordinates: Position(19.9449799, 50.0646501)),
           zoom: 10.0,
