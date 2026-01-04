@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:mapbox_maps_flutter/mapbox_maps_flutter.dart';
+import 'package:geolocator/geolocator.dart';
 
 class MapScreen extends StatefulWidget {
   const MapScreen({super.key});
@@ -11,6 +12,7 @@ class MapScreen extends StatefulWidget {
 
 class _MapScreenState extends State<MapScreen> {
   MapboxMap? mapboxMap;
+  bool _locationPermissionGranted = false;
 
   @override
   void initState() {
@@ -18,6 +20,72 @@ class _MapScreenState extends State<MapScreen> {
     final token = dotenv.env['MAPBOX_ACCESS_TOKEN'] ?? '';
     if (token.isNotEmpty) {
       MapboxOptions.setAccessToken(token);
+    }
+    _checkAndRequestLocationPermission();
+  }
+
+  Future<void> _checkAndRequestLocationPermission() async {
+    bool serviceEnabled;
+    LocationPermission permission;
+
+    // Sprawdź czy usługi lokalizacji są włączone
+    serviceEnabled = await Geolocator.isLocationServiceEnabled();
+    if (!serviceEnabled) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Usługi lokalizacji są wyłączone. Włącz je w ustawieniach.'),
+            duration: Duration(seconds: 4),
+          ),
+        );
+      }
+      return;
+    }
+
+    // Sprawdź status uprawnień
+    permission = await Geolocator.checkPermission();
+    if (permission == LocationPermission.denied) {
+      // Poproś o uprawnienia - wyświetli systemowy dialog
+      permission = await Geolocator.requestPermission();
+      if (permission == LocationPermission.denied) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Uprawnienia do lokalizacji zostały odrzucone.'),
+              duration: Duration(seconds: 3),
+            ),
+          );
+        }
+        return;
+      }
+    }
+
+    if (permission == LocationPermission.deniedForever) {
+      // Uprawnienia odrzucone na stałe
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Uprawnienia do lokalizacji odrzucone na stałe. Zmień w ustawieniach.'),
+            duration: Duration(seconds: 4),
+          ),
+        );
+      }
+      return;
+    }
+
+    // Uprawnienia przyznane
+    setState(() {
+      _locationPermissionGranted = true;
+    });
+
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Dostęp do lokalizacji przyznany!'),
+          duration: Duration(seconds: 2),
+          backgroundColor: Colors.green,
+        ),
+      );
     }
   }
 
@@ -47,6 +115,13 @@ class _MapScreenState extends State<MapScreen> {
     return Scaffold(
       appBar: AppBar(
         title: const Text('Mapa'),
+        actions: [
+          if (_locationPermissionGranted)
+            const Icon(Icons.location_on, color: Colors.green)
+          else
+            const Icon(Icons.location_off, color: Colors.red),
+          const SizedBox(width: 16),
+        ],
       ),
       body: MapWidget(
         key: const ValueKey("mapWidget"),
