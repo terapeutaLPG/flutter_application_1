@@ -1,9 +1,27 @@
+import 'dart:math';
+
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/foundation.dart';
 import '../models/place.dart';
 
+class PlaceFetchResult {
+  final List<Place> places;
+  final bool usedFallback;
+
+  PlaceFetchResult({required this.places, required this.usedFallback});
+}
+
 class PlaceService {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
+
+  Future<PlaceFetchResult> fetchPlacesOrFallback() async {
+    final places = await getPlaces();
+    if (places.isNotEmpty) {
+      return PlaceFetchResult(places: places, usedFallback: false);
+    }
+    final fallback = _generateFallbackPlaces();
+    return PlaceFetchResult(places: fallback, usedFallback: true);
+  }
 
   Future<List<Place>> getPlaces() async {
     try {
@@ -19,6 +37,52 @@ class PlaceService {
     } catch (e) {
       return [];
     }
+  }
+
+  List<Place> _generateFallbackPlaces() {
+    const centerLat = 51.1079;
+    const centerLon = 17.0385;
+    const innerRadius = 0.01;
+    const outerRadius = 0.02;
+    const minLat = 51.07;
+    const maxLat = 51.15;
+    const minLon = 16.95;
+    const maxLon = 17.12;
+
+    final random = Random();
+    final places = <Place>[];
+
+    double _clamp(double value, double min, double max) {
+      if (value < min) return min;
+      if (value > max) return max;
+      return value;
+    }
+
+    double _gaussian(Random rng) {
+      final u1 = rng.nextDouble().clamp(1e-6, 1.0);
+      final u2 = rng.nextDouble();
+      return sqrt(-2.0 * log(u1)) * cos(2 * pi * u2);
+    }
+
+    for (var i = 0; i < 50; i++) {
+      final useInner = random.nextDouble() < 0.7;
+      final radius = useInner ? innerRadius : outerRadius;
+      final dx = _gaussian(random) * radius;
+      final dy = _gaussian(random) * radius;
+      final lat = _clamp(centerLat + dy, minLat, maxLat);
+      final lon = _clamp(centerLon + dx, minLon, maxLon);
+
+      places.add(Place(
+        id: 'fallback-${i + 1}',
+        name: 'punkt ${i + 1}',
+        lat: lat,
+        lon: lon,
+        radiusMeters: 40,
+        points: 10,
+      ));
+    }
+
+    return places;
   }
 
   Future<void> seedPlacesIfEmpty() async {

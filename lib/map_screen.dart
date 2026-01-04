@@ -250,7 +250,8 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
   Future<void> _refreshPlaces({bool showCount = false}) async {
     if (!mounted) return;
     final placeService = PlaceService();
-    final places = await placeService.getPlaces();
+    final result = await placeService.fetchPlacesOrFallback();
+    final places = result.places;
 
     if (!mounted) return;
     if (_placeManager == null) return;
@@ -262,17 +263,14 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
       _placeAnnotations.clear();
     }
 
-    if (places.isEmpty) {
+    if (result.usedFallback) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text('Brak miejsc do wyswietlenia'),
           duration: Duration(seconds: 2),
         ),
       );
-      return;
-    }
-
-    if (showCount) {
+    } else if (showCount) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text('Zaladowano ${places.length} miejsc'),
