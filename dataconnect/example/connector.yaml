@@ -1,5 +1,5 @@
 connectorId: example
 generate:
-  dartSdk:
-    - outputDir: ../../lib/dataconnect_generated
-      package: dataconnect_generated/generated.dart
+  kotlinSdk:
+    - outputDir: ../../android/app/src/main/kotlin
+      package: com.google.firebase.dataconnect.generated
