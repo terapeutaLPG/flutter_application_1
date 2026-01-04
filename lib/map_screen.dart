@@ -647,13 +647,10 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
   }
 
   Future<void> _seedPlaces() async {
-    final placeService = PlaceService();
-    await placeService.seedPlacesIfEmpty();
-    
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('Seed miejsc wykonany'),
+          content: Text('Miejsca są już załadowane z Firestore'),
           duration: const Duration(seconds: 2),
         ),
       );

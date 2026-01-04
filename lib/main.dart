@@ -5,6 +5,7 @@ import 'package:flutter_application_1/login_screen.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'firebase_options.dart';
 import 'services/place_service.dart';
+import 'seed_places.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -12,7 +13,7 @@ void main() async {
   await Firebase.initializeApp(
     options: DefaultFirebaseOptions.currentPlatform,
   );
-  await PlaceService().seedPlacesIfEmpty();
+  await SeedPlaces.seedPlacesIfEmpty();
   runApp(const MapaEksploracjiApp());
 }
 
