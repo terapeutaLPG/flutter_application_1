@@ -70,6 +70,8 @@ flutter:
     - .env
     - assets/images/pin_map.svg
     - assets/images/yes_pin_map.svg
+    - assets/images/red_dot.svg
+    - assets/images/green_dot.svg
 
 flutter_icons:
   android: true

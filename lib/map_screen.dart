@@ -329,15 +329,15 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
 
     for (final place in places) {
       final claimed = _claimedPlaceIds.contains(place.id);
-      final iconColor = claimed ? Colors.green.value : Colors.red.value;
       final annotation = await _placeManager!.create(
         PointAnnotationOptions(
           geometry: Point(coordinates: Position(place.lon, place.lat)),
           textField: place.name,
-          textSize: 12,
-          textOffset: [0.0, 1.2],
+          textSize: 10,
+          textOffset: [0.0, 1.5],
           iconImage: "marker-15",
-          iconColor: iconColor,
+          iconSize: 1.2,
+          iconColor: claimed ? Colors.green.value : Colors.red.value,
         ),
       );
       _placeAnnotations.add(annotation);
