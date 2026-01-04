@@ -7,6 +7,7 @@ import 'services/tile_service.dart';
 import 'services/place_service.dart';
 import 'models/tile_model.dart';
 import 'models/tile_calculator.dart';
+import 'models/place.dart';
 import 'dart:async';
 
 class MapScreen extends StatefulWidget {
@@ -14,6 +15,14 @@ class MapScreen extends StatefulWidget {
 
   @override
   State<MapScreen> createState() => _MapScreenState();
+}
+
+class _PointTapListener implements OnPointAnnotationClickListener {
+  final bool Function(PointAnnotation) handler;
+  _PointTapListener(this.handler);
+
+  @override
+  bool onPointAnnotationClick(PointAnnotation annotation) => handler(annotation);
 }
 
 class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
@@ -25,6 +34,9 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
   PointAnnotationManager? _placeManager;
   final List<PointAnnotation> _placeAnnotations = [];
   Set<String> _claimedPlaceIds = {};
+  final Map<String, Place> _placesByAnnotationId = {};
+  List<Place> _places = [];
+  bool _usingFallback = false;
   StreamSubscription<geo.Position>? _positionStreamSubscription;
   String? _currentTileId;
   int _discoveredTilesCount = 0;
@@ -123,7 +135,23 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
     ).listen((geo.Position position) {
       _lastKnownPosition = position;
       _processLocation(position.latitude, position.longitude);
+      _checkProximity(position);
     });
+  }
+
+  void _checkProximity(geo.Position pos) {
+    for (final place in _places) {
+      if (_claimedPlaceIds.contains(place.id)) continue;
+      final d = geo.Geolocator.distanceBetween(
+        pos.latitude,
+        pos.longitude,
+        place.lat,
+        place.lon,
+      );
+      if (d <= place.radiusMeters) {
+        return;
+      }
+    }
   }
 
   Future<void> _processLocation(double lat, double lon) async {
@@ -199,6 +227,7 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
     
     _polygonManager = await map.annotations.createPolygonAnnotationManager();
     _placeManager = await map.annotations.createPointAnnotationManager();
+    _placeManager?.addOnPointAnnotationClickListener(_PointTapListener(_onPlaceTapped));
     
     await _loadDiscoveredTiles();
     await _loadClaimedPlaces();
@@ -263,6 +292,8 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
     final placeService = PlaceService();
     final result = await placeService.fetchPlacesOrFallback();
     final places = result.places;
+    _usingFallback = result.usedFallback;
+    _places = places;
     if (!result.usedFallback) {
       _claimedPlaceIds = await placeService.getClaimedPlaceIds();
     } else {
@@ -278,6 +309,7 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
       }
       _placeAnnotations.clear();
     }
+    _placesByAnnotationId.clear();
 
     if (result.usedFallback) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -309,6 +341,113 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
         ),
       );
       _placeAnnotations.add(annotation);
+      _placesByAnnotationId[annotation.id] = place;
+    }
+  }
+
+  bool _onPlaceTapped(PointAnnotation annotation) {
+    if (_usingFallback) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Brak danych o punktach'),
+          duration: Duration(seconds: 2),
+        ),
+      );
+      return true;
+    }
+
+    final place = _placesByAnnotationId[annotation.id];
+    if (place == null) return true;
+    if (_claimedPlaceIds.contains(place.id)) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Punkt już odebrany'),
+          duration: Duration(seconds: 2),
+        ),
+      );
+      return true;
+    }
+
+    final pos = _lastKnownPosition;
+    if (pos == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Brak bieżącej lokalizacji'),
+          duration: Duration(seconds: 2),
+        ),
+      );
+      return true;
+    }
+
+    final distance = geo.Geolocator.distanceBetween(
+      pos.latitude,
+      pos.longitude,
+      place.lat,
+      place.lon,
+    );
+
+    if (distance > place.radiusMeters) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Podejdź bliżej, aby odebrać'),
+          duration: Duration(seconds: 2),
+        ),
+      );
+      return true;
+    }
+
+    showModalBottomSheet(
+      context: context,
+      builder: (ctx) {
+        return Padding(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Text(place.name, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w600)),
+              const SizedBox(height: 12),
+              ElevatedButton(
+                onPressed: () async {
+                  Navigator.pop(ctx);
+                  await _claimPlace(place, annotation);
+                },
+                child: const Text('Odbierz'),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+    return true;
+  }
+
+  Future<void> _claimPlace(Place place, PointAnnotation annotation) async {
+    final placeService = PlaceService();
+    final ok = await placeService.claimPlace(place.id, place.points);
+    if (!ok) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Nie udało się odebrać'),
+            duration: Duration(seconds: 2),
+          ),
+        );
+      }
+      return;
+    }
+
+    _claimedPlaceIds.add(place.id);
+    annotation.iconColor = Colors.grey.shade500.value;
+    await _placeManager?.update(annotation);
+
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Punkt został odebrany'),
+          duration: Duration(seconds: 2),
+        ),
+      );
     }
   }
 

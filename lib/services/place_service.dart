@@ -40,6 +40,28 @@ class PlaceService {
     }
   }
 
+  Future<bool> claimPlace(String placeId, int gainedPoints) async {
+    final user = _auth.currentUser;
+    if (user == null) return false;
+    try {
+      final doc = _firestore
+          .collection('users')
+          .doc(user.uid)
+          .collection('claimed_places')
+          .doc(placeId);
+
+      await doc.set({
+        'claimedAt': FieldValue.serverTimestamp(),
+        'gainedPoints': gainedPoints,
+        'placeId': placeId,
+        'userId': user.uid,
+      }, SetOptions(merge: true));
+      return true;
+    } catch (_) {
+      return false;
+    }
+  }
+
   Future<List<Place>> getPlaces() async {
     try {
       final snapshot = await _firestore.collection('places').get();
