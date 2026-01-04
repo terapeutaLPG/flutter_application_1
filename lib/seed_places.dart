@@ -18,15 +18,15 @@ class SeedPlaces {
     {"id": "ul_olkuska", "name": "ul. Olkuska", "lat": 51.1090, "lon": 17.0360},
     {"id": "ul_wita_stwosza", "name": "ul. Wita Stworza", "lat": 51.1094, "lon": 17.0328},
     {"id": "ul_szewska", "name": "ul. Szewska", "lat": 51.1096, "lon": 17.0310},
-    {"id": "ul_kiełbaśnicza", "name": "ul. Kielbasnicza", "lat": 51.1088, "lon": 17.0323},
-    {"id": "ul_rusk", "name": "ul. Ruska", "lat": 51.1089, "lon": 17.0348},
+    {"id": "ul_kielbasnicza", "name": "ul. Kielbasnicza", "lat": 51.1088, "lon": 17.0323},
+    {"id": "ul_ruska", "name": "ul. Ruska", "lat": 51.1089, "lon": 17.0348},
     {"id": "ul_kuznicka", "name": "ul. Kuznicka", "lat": 51.1098, "lon": 17.0299},
     {"id": "ul_grochowa", "name": "ul. Grochowa", "lat": 51.1120, "lon": 17.0409},
     {"id": "ul_kasprowicza", "name": "ul. Kasprowicza", "lat": 51.1133, "lon": 17.0602},
     {"id": "plac_grunwaldzki", "name": "Plac Grunwaldzki", "lat": 51.1216, "lon": 17.0572},
     {"id": "most_grunwaldzki", "name": "Most Grunwaldzki", "lat": 51.1211, "lon": 17.0598},
     {"id": "hala_targowa", "name": "Hala Targowa", "lat": 51.1145, "lon": 17.0453},
-    {"id": "ul_wyspa_slodowa", "name": "Wyspa Slodowa", "lat": 51.1102, "lon": 17.0299},
+    {"id": "wyspa_slodowa", "name": "Wyspa Slodowa", "lat": 51.1102, "lon": 17.0299},
     {"id": "ul_karlowicza", "name": "ul. Karlowicza", "lat": 51.1128, "lon": 17.0512},
     {"id": "ul_mickiewicza", "name": "ul. Mickiewicza", "lat": 51.1119, "lon": 17.0510},
     {"id": "ul_legnicka", "name": "ul. Legnicka", "lat": 51.1147, "lon": 17.0373},
@@ -53,10 +53,12 @@ class SeedPlaces {
 
   static Future<void> seedPlacesIfEmpty() async {
     final coll = FirebaseFirestore.instance.collection('places');
-    final snapshot = await coll.get();
-    if (snapshot.docs.isNotEmpty) return;
-
+    
+    // Seed 46 main places
     for (var place in _places) {
+      final doc = await coll.doc(place['id']).get();
+      if (doc.exists) continue;
+      
       await coll.doc(place['id']).set({
         'name': place['name'],
         'lat': place['lat'],
@@ -64,6 +66,45 @@ class SeedPlaces {
         'radiusMeters': 40,
         'points': 10
       });
+    }
+
+    // Seed centers with offsets
+    final centers = <Map<String, dynamic>>[
+      {'id': 'muchobor_wielki', 'name': 'Muchobor Wielki', 'lat': 51.0969, 'lon': 16.9555},
+      {'id': 'muchobor_maly', 'name': 'Muchobor Maly', 'lat': 51.0952, 'lon': 16.9825},
+      {'id': 'nowy_dwor', 'name': 'Nowy Dwor', 'lat': 51.1010, 'lon': 16.9445},
+      {'id': 'kuzniki', 'name': 'Kuzniki', 'lat': 51.1102, 'lon': 16.9630},
+      {'id': 'gadow_maly', 'name': 'Gadow Maly', 'lat': 51.1145, 'lon': 16.9565},
+      {'id': 'popowice', 'name': 'Popowice', 'lat': 51.1216, 'lon': 16.9840},
+      {'id': 'pilczyce', 'name': 'Pilczyce', 'lat': 51.1368, 'lon': 16.9575},
+      {'id': 'kozanow', 'name': 'Kozanow', 'lat': 51.1455, 'lon': 16.9870},
+      {'id': 'magnolia_park', 'name': 'Magnolia Park', 'lat': 51.1217, 'lon': 16.9847},
+      {'id': 'wroclaw_fashion_outlet', 'name': 'Wroclaw Fashion Outlet', 'lat': 51.1008, 'lon': 16.9398},
+    ];
+
+    final offsets = const [
+      {'suffix': '1', 'dlat': 0.0012, 'dlon': 0.0010},
+      {'suffix': '2', 'dlat': -0.0011, 'dlon': -0.0010},
+    ];
+
+    for (final c in centers) {
+      for (final o in offsets) {
+        final id = '${c['id']}_${o['suffix']}';
+        final doc = await coll.doc(id).get();
+        if (doc.exists) continue;
+        
+        final name = '${c['name']} punkt ${o['suffix']}';
+        final lat = (c['lat'] as num).toDouble() + (o['dlat'] as num).toDouble();
+        final lon = (c['lon'] as num).toDouble() + (o['dlon'] as num).toDouble();
+
+        await coll.doc(id).set({
+          'name': name,
+          'lat': lat,
+          'lon': lon,
+          'radiusMeters': 40,
+          'points': 10,
+        });
+      }
     }
   }
 }
