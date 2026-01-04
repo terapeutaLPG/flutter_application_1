@@ -16,12 +16,14 @@ class MapScreen extends StatefulWidget {
   State<MapScreen> createState() => _MapScreenState();
 }
 
-class _MapScreenState extends State<MapScreen> {
+class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
   MapboxMap? mapboxMap;
   bool _locationPermissionGranted = false;
   final TileService _tileService = TileService();
   PolygonAnnotationManager? _polygonManager;
   final Map<String, PolygonAnnotation> _tilePolygons = {};
+  PointAnnotationManager? _placeManager;
+  final List<PointAnnotation> _placeAnnotations = [];
   StreamSubscription<geo.Position>? _positionStreamSubscription;
   String? _currentTileId;
   int _discoveredTilesCount = 0;
@@ -30,6 +32,7 @@ class _MapScreenState extends State<MapScreen> {
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     final token = dotenv.env['MAPBOX_ACCESS_TOKEN'] ?? '';
     if (token.isNotEmpty) {
       MapboxOptions.setAccessToken(token);
@@ -40,7 +43,15 @@ class _MapScreenState extends State<MapScreen> {
   @override
   void dispose() {
     _positionStreamSubscription?.cancel();
+    WidgetsBinding.instance.removeObserver(this);
     super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      _refreshPlaces();
+    }
   }
 
   Future<void> _enableLocationTracking() async {
@@ -186,8 +197,10 @@ class _MapScreenState extends State<MapScreen> {
     mapboxMap = map;
     
     _polygonManager = await map.annotations.createPolygonAnnotationManager();
+    _placeManager = await map.annotations.createPointAnnotationManager();
     
     await _loadDiscoveredTiles();
+    await _refreshPlaces();
     
     if (_locationPermissionGranted) {
       _enableLocationTracking();
@@ -232,6 +245,54 @@ class _MapScreenState extends State<MapScreen> {
     setState(() {
       _discoveredTilesCount = _tilePolygons.length;
     });
+  }
+
+  Future<void> _refreshPlaces({bool showCount = false}) async {
+    if (!mounted) return;
+    final placeService = PlaceService();
+    final places = await placeService.getPlaces();
+
+    if (!mounted) return;
+    if (_placeManager == null) return;
+
+    if (_placeAnnotations.isNotEmpty) {
+      for (final annotation in List<PointAnnotation>.from(_placeAnnotations)) {
+        await _placeManager!.delete(annotation);
+      }
+      _placeAnnotations.clear();
+    }
+
+    if (places.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Brak miejsc do wyswietlenia'),
+          duration: Duration(seconds: 2),
+        ),
+      );
+      return;
+    }
+
+    if (showCount) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Zaladowano ${places.length} miejsc'),
+          duration: const Duration(seconds: 2),
+        ),
+      );
+    }
+
+    for (final place in places) {
+      final annotation = await _placeManager!.create(
+        PointAnnotationOptions(
+          geometry: Point(coordinates: Position(place.lon, place.lat)),
+          textField: place.name,
+          textSize: 12,
+          textOffset: [0.0, 1.2],
+          iconImage: "marker-15",
+        ),
+      );
+      _placeAnnotations.add(annotation);
+    }
   }
 
   @override
@@ -315,7 +376,7 @@ class _MapScreenState extends State<MapScreen> {
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
                 ElevatedButton(
-                  onPressed: _loadPlaces,
+                  onPressed: () => _refreshPlaces(showCount: true),
                   child: const Text('Zaladuj miejsca'),
                 ),
                 const SizedBox(width: 10),
@@ -424,20 +485,6 @@ class _MapScreenState extends State<MapScreen> {
         const SnackBar(
           content: Text('Mapa wyczyszczona'),
           duration: Duration(seconds: 2),
-        ),
-      );
-    }
-  }
-
-  Future<void> _loadPlaces() async {
-    final placeService = PlaceService();
-    final places = await placeService.getPlaces();
-    
-    if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Zaladowano ${places.length} miejsc'),
-          duration: const Duration(seconds: 2),
         ),
       );
     }
