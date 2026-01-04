@@ -25,6 +25,7 @@ class _MapScreenState extends State<MapScreen> {
   StreamSubscription<geo.Position>? _positionStreamSubscription;
   String? _currentTileId;
   int _discoveredTilesCount = 0;
+  geo.Position? _lastKnownPosition;
 
   @override
   void initState() {
@@ -60,6 +61,7 @@ class _MapScreenState extends State<MapScreen> {
         ),
       );
       
+      _lastKnownPosition = position;
       await _processLocation(position.latitude, position.longitude);
       
       await mapboxMap!.flyTo(
@@ -82,6 +84,7 @@ class _MapScreenState extends State<MapScreen> {
       try {
         final lastPosition = await geo.Geolocator.getLastKnownPosition();
         if (lastPosition != null) {
+          _lastKnownPosition = lastPosition;
           await _processLocation(lastPosition.latitude, lastPosition.longitude);
           await mapboxMap!.flyTo(
             CameraOptions(
@@ -106,6 +109,7 @@ class _MapScreenState extends State<MapScreen> {
     _positionStreamSubscription = geo.Geolocator.getPositionStream(
       locationSettings: locationSettings,
     ).listen((geo.Position position) {
+      _lastKnownPosition = position;
       _processLocation(position.latitude, position.longitude);
     });
   }
@@ -295,6 +299,15 @@ class _MapScreenState extends State<MapScreen> {
             onMapCreated: _onMapCreated,
           ),
           Positioned(
+            top: 80,
+            right: 16,
+            child: FloatingActionButton(
+              onPressed: _returnToMyLocation,
+              backgroundColor: Colors.purple,
+              child: const Icon(Icons.my_location, color: Colors.white),
+            ),
+          ),
+          Positioned(
             bottom: 20,
             left: 20,
             right: 20,
@@ -319,6 +332,53 @@ class _MapScreenState extends State<MapScreen> {
           ),
         ],
       ),
+    );
+  }
+
+  Future<void> _returnToMyLocation() async {
+    if (mapboxMap == null) return;
+
+    if (_lastKnownPosition != null) {
+      await mapboxMap!.flyTo(
+        CameraOptions(
+          center: Point(coordinates: Position(
+            _lastKnownPosition!.longitude,
+            _lastKnownPosition!.latitude,
+          )),
+          zoom: 16.0,
+        ),
+        MapAnimationOptions(duration: 1000),
+      );
+    } else {
+      try {
+        final position = await geo.Geolocator.getCurrentPosition(
+          locationSettings: const geo.LocationSettings(
+            accuracy: geo.LocationAccuracy.high,
+            timeLimit: Duration(seconds: 5),
+          ),
+        );
+        _lastKnownPosition = position;
+        await mapboxMap!.flyTo(
+          CameraOptions(
+            center: Point(coordinates: Position(
+              position.longitude,
+              position.latitude,
+            )),
+            zoom: 16.0,
+          ),
+          MapAnimationOptions(duration: 1000),
+        );
+      } catch (e) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Nie można pobrać lokalizacji'),
+              duration: Duration(seconds: 2),
+            ),
+          );
+        }
+      }
+    }
   }
 
   void _showClearMapDialog() {
@@ -368,7 +428,6 @@ class _MapScreenState extends State<MapScreen> {
       );
     }
   }
-}
 
   Future<void> _loadPlaces() async {
     final placeService = PlaceService();
