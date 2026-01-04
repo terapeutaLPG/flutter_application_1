@@ -44,19 +44,54 @@ class PlaceService {
     final user = _auth.currentUser;
     if (user == null) return false;
     try {
-      final doc = _firestore
-          .collection('users')
-          .doc(user.uid)
-          .collection('claimed_places')
-          .doc(placeId);
+      final userRef = _firestore.collection('users').doc(user.uid);
+      final placeRef = userRef.collection('claimed_places').doc(placeId);
 
-      await doc.set({
-        'claimedAt': FieldValue.serverTimestamp(),
-        'gainedPoints': gainedPoints,
-        'placeId': placeId,
-        'userId': user.uid,
-      }, SetOptions(merge: true));
-      return true;
+      final claimed = await _firestore.runTransaction<bool>((tx) async {
+        final claimedSnap = await tx.get(placeRef);
+        if (claimedSnap.exists) {
+          return false;
+        }
+
+        tx.set(placeRef, {
+          'claimedAt': FieldValue.serverTimestamp(),
+          'gainedPoints': gainedPoints,
+          'placeId': placeId,
+          'userId': user.uid,
+        }, SetOptions(merge: true));
+
+        final userSnap = await tx.get(userRef);
+        final data = userSnap.data() ?? {};
+        final currentTotal = (data['totalPoints'] as num?)?.toInt() ?? 0;
+        final currentLevel = (data['level'] as num?)?.toInt() ?? 1;
+        final currentNext = (data['nextLevelPoints'] as num?)?.toInt() ?? 30;
+
+        var newTotal = currentTotal + 10;
+        var newLevel = currentLevel;
+        var newNext = currentNext;
+
+        while (newTotal >= newNext) {
+          newLevel += 1;
+          newNext = newNext * 2;
+        }
+
+        final updateData = <String, dynamic>{
+          'totalPoints': newTotal,
+          'level': newLevel,
+          'nextLevelPoints': newNext,
+          'email': data['email'] ?? user.email,
+          'updatedAt': FieldValue.serverTimestamp(),
+        };
+
+        if (data['createdAt'] == null) {
+          updateData['createdAt'] = FieldValue.serverTimestamp();
+        }
+
+        tx.set(userRef, updateData, SetOptions(merge: true));
+        return true;
+      });
+
+      return claimed;
     } catch (_) {
       return false;
     }

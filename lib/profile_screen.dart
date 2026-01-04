@@ -34,6 +34,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
         'lastLoginAt': data['lastLoginAt'] ?? user.metadata.lastSignInTime,
         'nick': data['nick'],
         'updatedAt': data['updatedAt'],
+        'totalPoints': data['totalPoints'] ?? 0,
+        'level': data['level'] ?? 1,
+        'nextLevelPoints': data['nextLevelPoints'] ?? 30,
       };
     } catch (_) {
       return {
@@ -42,6 +45,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
         'lastLoginAt': user.metadata.lastSignInTime,
         'nick': null,
         'updatedAt': null,
+        'totalPoints': 0,
+        'level': 1,
+        'nextLevelPoints': 30,
       };
     }
   }
@@ -146,6 +152,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
           final createdAt = _formatDate(data['createdAt']);
           final lastLoginAt = _formatDate(data['lastLoginAt']);
           final nick = data['nick']?.toString();
+          final totalPoints = data['totalPoints']?.toString() ?? '0';
+          final level = data['level']?.toString() ?? '1';
+          final nextLevelPoints = data['nextLevelPoints']?.toString() ?? '30';
 
           return ListView(
             padding: const EdgeInsets.all(20),
@@ -162,6 +171,16 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   onPressed: () => _showEditNickDialog(nick),
                   child: const Text('Edytuj'),
                 ),
+              ),
+              const Divider(),
+              ListTile(
+                title: const Text('Poziom'),
+                subtitle: Text(level),
+              ),
+              const Divider(),
+              ListTile(
+                title: const Text('Punkty'),
+                subtitle: Text('$totalPoints / $nextLevelPoints'),
               ),
               const Divider(),
               ListTile(
