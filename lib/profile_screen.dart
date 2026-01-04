@@ -33,6 +33,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
         'createdAt': data['createdAt'] ?? user.metadata.creationTime,
         'lastLoginAt': data['lastLoginAt'] ?? user.metadata.lastSignInTime,
         'nick': data['nick'],
+        'updatedAt': data['updatedAt'],
       };
     } catch (_) {
       return {
@@ -40,6 +41,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
         'createdAt': user.metadata.creationTime,
         'lastLoginAt': user.metadata.lastSignInTime,
         'nick': null,
+        'updatedAt': null,
       };
     }
   }
@@ -64,15 +66,21 @@ class _ProfileScreenState extends State<ProfileScreen> {
       await FirebaseFirestore.instance.collection('users').doc(user.uid).set(
         {
           'nick': trimmed,
-          'email': user.email,
-          'lastLoginAt': FieldValue.serverTimestamp(),
-          'createdAt': FieldValue.serverTimestamp(),
+          'updatedAt': FieldValue.serverTimestamp(),
         },
         SetOptions(merge: true),
       );
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Pomyślnie zapisano')));
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Pomyślnie zapisano')),
+      );
       await _refreshProfile();
+    } on FirebaseException catch (e) {
+      if (!mounted) return;
+      final msg = e.code == 'permission-denied'
+          ? 'Brak uprawnień w Firestore (rules). Zmień reguły dla users/{uid}.'
+          : 'Błąd zapisu: ${e.message ?? e.code}';
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Błąd zapisu: $e')));
@@ -164,6 +172,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
               ListTile(
                 title: const Text('Ostatnie logowanie'),
                 subtitle: Text(lastLoginAt),
+              ),
+              const Divider(),
+              ListTile(
+                title: const Text('Ostatnia zmiana profilu'),
+                subtitle: Text(_formatDate(data['updatedAt'])),
               ),
             ],
           );
