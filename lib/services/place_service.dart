@@ -29,6 +29,17 @@ class PlaceService {
     if (user == null) return {};
 
     try {
+      // Primary source: user subcollection to match claim writes
+      final claimedSnapshot = await _firestore
+          .collection('users')
+          .doc(user.uid)
+          .collection('claimed_places')
+          .get();
+
+      final claimedIds = claimedSnapshot.docs.map((doc) => doc.id).toSet();
+      if (claimedIds.isNotEmpty) return claimedIds;
+
+      // Legacy fallback: array stored in claimed_places/{uid}
       final doc = await _firestore.collection('claimed_places').doc(user.uid).get();
       final data = doc.data();
       if (data == null) return {};
@@ -59,13 +70,19 @@ class PlaceService {
           'userId': user.uid,
         }, SetOptions(merge: true));
 
+        // Keep legacy aggregate list in sync for older reads
+        final claimedListRef = _firestore.collection('claimed_places').doc(user.uid);
+        tx.set(claimedListRef, {
+          'placeIds': FieldValue.arrayUnion([placeId]),
+        }, SetOptions(merge: true));
+
         final userSnap = await tx.get(userRef);
         final data = userSnap.data() ?? {};
         final currentTotal = (data['totalPoints'] as num?)?.toInt() ?? 0;
         final currentLevel = (data['level'] as num?)?.toInt() ?? 1;
         final currentNext = (data['nextLevelPoints'] as num?)?.toInt() ?? 30;
 
-        var newTotal = currentTotal + 10;
+        var newTotal = currentTotal + gainedPoints;
         var newLevel = currentLevel;
         var newNext = currentNext;
 

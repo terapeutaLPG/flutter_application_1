@@ -337,6 +337,7 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
           geometry: Point(coordinates: Position(place.lon, place.lat)),
           textField: place.name,
           textSize: 10,
+          textColor: claimed ? Colors.green.value : Colors.red.value,
           textOffset: [0.0, 2.0],
           iconImage: "marker-15",
           iconSize: 1.8,
@@ -476,6 +477,7 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
     
     // Zmienia ikonkę na zieloną
     annotation.iconColor = Colors.green.value;
+  annotation.textColor = Colors.green.value;
     await _placeManager?.update(annotation);
 
     if (mounted) {
