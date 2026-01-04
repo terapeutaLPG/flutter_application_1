@@ -1,6 +1,7 @@
 import 'dart:math';
 
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/foundation.dart';
 import '../models/place.dart';
 
@@ -13,6 +14,7 @@ class PlaceFetchResult {
 
 class PlaceService {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
+  final FirebaseAuth _auth = FirebaseAuth.instance;
 
   Future<PlaceFetchResult> fetchPlacesOrFallback() async {
     final places = await getPlaces();
@@ -21,6 +23,21 @@ class PlaceService {
     }
     final fallback = _generateFallbackPlaces();
     return PlaceFetchResult(places: fallback, usedFallback: true);
+  }
+
+  Future<Set<String>> getClaimedPlaceIds() async {
+    final user = _auth.currentUser;
+    if (user == null) return {};
+
+    try {
+      final doc = await _firestore.collection('claimed_places').doc(user.uid).get();
+      final data = doc.data();
+      if (data == null) return {};
+      final list = (data['placeIds'] as List?)?.whereType<String>().toList() ?? [];
+      return list.toSet();
+    } catch (_) {
+      return {};
+    }
   }
 
   Future<List<Place>> getPlaces() async {

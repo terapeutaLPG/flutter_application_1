@@ -24,6 +24,7 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
   final Map<String, PolygonAnnotation> _tilePolygons = {};
   PointAnnotationManager? _placeManager;
   final List<PointAnnotation> _placeAnnotations = [];
+  Set<String> _claimedPlaceIds = {};
   StreamSubscription<geo.Position>? _positionStreamSubscription;
   String? _currentTileId;
   int _discoveredTilesCount = 0;
@@ -200,6 +201,7 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
     _placeManager = await map.annotations.createPointAnnotationManager();
     
     await _loadDiscoveredTiles();
+    await _loadClaimedPlaces();
     await _refreshPlaces();
     
     if (_locationPermissionGranted) {
@@ -247,11 +249,25 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
     });
   }
 
+  Future<void> _loadClaimedPlaces() async {
+    final placeService = PlaceService();
+    final ids = await placeService.getClaimedPlaceIds();
+    if (!mounted) return;
+    setState(() {
+      _claimedPlaceIds = ids;
+    });
+  }
+
   Future<void> _refreshPlaces({bool showCount = false}) async {
     if (!mounted) return;
     final placeService = PlaceService();
     final result = await placeService.fetchPlacesOrFallback();
     final places = result.places;
+    if (!result.usedFallback) {
+      _claimedPlaceIds = await placeService.getClaimedPlaceIds();
+    } else {
+      _claimedPlaceIds = {};
+    }
 
     if (!mounted) return;
     if (_placeManager == null) return;
@@ -280,6 +296,8 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
     }
 
     for (final place in places) {
+      final claimed = _claimedPlaceIds.contains(place.id);
+      final iconColor = claimed ? Colors.grey.shade500.value : Colors.amber.shade400.value;
       final annotation = await _placeManager!.create(
         PointAnnotationOptions(
           geometry: Point(coordinates: Position(place.lon, place.lat)),
@@ -287,6 +305,7 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
           textSize: 12,
           textOffset: [0.0, 1.2],
           iconImage: "marker-15",
+          iconColor: iconColor,
         ),
       );
       _placeAnnotations.add(annotation);
