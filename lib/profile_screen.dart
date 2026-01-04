@@ -2,8 +2,21 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 
-class ProfileScreen extends StatelessWidget {
+class ProfileScreen extends StatefulWidget {
   const ProfileScreen({super.key});
+
+  @override
+  State<ProfileScreen> createState() => _ProfileScreenState();
+}
+
+class _ProfileScreenState extends State<ProfileScreen> {
+  late Future<Map<String, dynamic>> _profileFuture;
+
+  @override
+  void initState() {
+    super.initState();
+    _profileFuture = _fetchProfile();
+  }
 
   Future<Map<String, dynamic>> _fetchProfile() async {
     final user = FirebaseAuth.instance.currentUser;
@@ -31,6 +44,65 @@ class ProfileScreen extends StatelessWidget {
     }
   }
 
+  Future<void> _refreshProfile() async {
+    setState(() {
+      _profileFuture = _fetchProfile();
+    });
+  }
+
+  Future<void> _saveNick(String nick) async {
+    final trimmed = nick.trim();
+    if (trimmed.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Podaj nick')));
+      return;
+    }
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) {
+      return;
+    }
+    await FirebaseFirestore.instance.collection('users').doc(user.uid).set(
+      {
+        'nick': trimmed,
+        'email': user.email,
+        'lastLoginAt': user.metadata.lastSignInTime,
+        'createdAt': user.metadata.creationTime,
+      },
+      SetOptions(merge: true),
+    );
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Pomyślnie zapisano')));
+    await _refreshProfile();
+  }
+
+  Future<void> _showEditNickDialog(String? currentNick) async {
+    final controller = TextEditingController(text: currentNick ?? '');
+    final result = await showDialog<String>(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          title: const Text('Edytuj nick'),
+          content: TextField(
+            controller: controller,
+            decoration: const InputDecoration(labelText: 'Nick'),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: const Text('Anuluj'),
+            ),
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(controller.text),
+              child: const Text('Zapisz'),
+            ),
+          ],
+        );
+      },
+    );
+    if (result != null) {
+      await _saveNick(result);
+    }
+  }
+
   String _formatDate(dynamic value) {
     if (value is Timestamp) {
       return value.toDate().toIso8601String();
@@ -51,7 +123,7 @@ class ProfileScreen extends StatelessWidget {
         title: const Text('Profil'),
       ),
       body: FutureBuilder<Map<String, dynamic>>(
-        future: _fetchProfile(),
+        future: _profileFuture,
         builder: (context, snapshot) {
           if (snapshot.connectionState == ConnectionState.waiting) {
             return const Center(child: CircularProgressIndicator());
@@ -73,6 +145,10 @@ class ProfileScreen extends StatelessWidget {
               ListTile(
                 title: const Text('Nick'),
                 subtitle: Text(nick?.isNotEmpty == true ? nick! : 'brak'),
+                trailing: TextButton(
+                  onPressed: () => _showEditNickDialog(nick),
+                  child: const Text('Edytuj'),
+                ),
               ),
               const Divider(),
               ListTile(
