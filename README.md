@@ -18,3 +18,4 @@ samples, guidance on mobile development, and a full API reference.
 
 
 Autor: Igor Fabiszak, 51706
+Przedmiot: Programowanie aplikacji hybrydowych - Projekt zaliczeniowy 
